@@ -19,7 +19,7 @@ A configurable status bar for [Claude Code](https://claude.ai/code) that shows m
 - **Git segment** — branch name (truncated), dirty indicator `*`, ahead/behind in debug mode
 - **State segment** — `LIVE` (red) when on production host or production branch, `SAFE` otherwise
 - **Time segment** — current `HH:MM` in ops/debug modes
-- **Two styles** — `flat` (default) or `powerline` (▶ transitions, no Nerd Font needed)
+- **Three styles** — `blend` (default, ▌ half-block color fusion), `flat` (spaced blocks), `powerline` (▶ arrows)
 - **Three modes** — `focus` (minimal), `ops` (default), `debug` (+ CWD + ahead/behind)
 
 ---
@@ -75,8 +75,8 @@ Add these to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
 ### Style and mode
 
 ```bash
-export CLAUDE_SL_STYLE=powerline         # flat (default) or powerline
-export CLAUDE_STATUSLINE_MODE=focus      # focus | ops (default) | debug
+export CLAUDE_SL_STYLE=flat             # blend (default) | flat | powerline
+export CLAUDE_STATUSLINE_MODE=focus     # focus | ops (default) | debug
 ```
 
 | Mode | Segments shown |

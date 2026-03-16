@@ -50,7 +50,7 @@ MODEL=$(printf '%s' "$INPUT" | jq -r '
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 MODE="${CLAUDE_STATUSLINE_MODE:-ops}"
-STYLE="${CLAUDE_SL_STYLE:-flat}"
+STYLE="${CLAUDE_SL_STYLE:-blend}"
 
 ORG_NAME="${ORG_NAME:-ORG}"
 ORG_VAULT_ROOT="${ORG_VAULT_ROOT:-$HOME/vault}"
@@ -191,10 +191,13 @@ render_bar() {
     for i in "${!SEGS[@]}"; do
         local text="${SEGS[$i]}" cbg_n="${SBGS[$i]}" cfg_n="${SFGS[$i]}"
         local next=$(( i + 1 ))
-        if [ "$STYLE" = "powerline" ] && [ $next -lt $count ]; then
+        if [ "$STYLE" = "blend" ] && [ $next -lt $count ]; then
+            local nbg_n="${SBGS[$next]}"
+            out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text}$(cbg "$nbg_n")$(cfg "$cbg_n")▌"
+        elif [ "$STYLE" = "powerline" ] && [ $next -lt $count ]; then
             local nbg_n="${SBGS[$next]}"
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} $(cbg "$nbg_n")$(cfg "$cbg_n")▶"
-        elif [ "$STYLE" = "powerline" ]; then
+        elif [ "$STYLE" = "powerline" ] || [ "$STYLE" = "blend" ]; then
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} ${RST}"
         else
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} ${RST} "

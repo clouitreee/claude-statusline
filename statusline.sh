@@ -27,8 +27,9 @@
 #                              Useful if you have multiple Claude sessions with different roles.
 #
 # flat      — colored blocks with reset gap between segments
+# blend     — segments fuse together using ▌ (U+258C) half-block transitions (default)
 # powerline — colored blocks with ▶ (U+25B6) chained transitions
-#             (no Nerd Font required)
+#             (no Nerd Font required for any style)
 #
 # 256-color with ANSI escape codes. No secrets in output.
 
@@ -44,7 +45,7 @@ MODEL=$(printf '%s' "$INPUT" | jq -r '
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 MODE="${CLAUDE_STATUSLINE_MODE:-ops}"
-STYLE="${CLAUDE_SL_STYLE:-flat}"
+STYLE="${CLAUDE_SL_STYLE:-blend}"
 
 # ─── 256-COLOR PALETTE ────────────────────────────────────────────────────────
 C_DARK=236      # segment default bg (dark gray)
@@ -154,10 +155,14 @@ render_bar() {
         local text="${SEGS[$i]}" cbg_n="${SBGS[$i]}" cfg_n="${SFGS[$i]}"
         local next=$(( i + 1 ))
 
-        if [ "$STYLE" = "powerline" ] && [ $next -lt $count ]; then
+        if [ "$STYLE" = "blend" ] && [ $next -lt $count ]; then
+            # ▌ left-half block: fg=current bg, bg=next bg → smooth color fusion
+            local nbg_n="${SBGS[$next]}"
+            out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text}$(cbg "$nbg_n")$(cfg "$cbg_n")▌"
+        elif [ "$STYLE" = "powerline" ] && [ $next -lt $count ]; then
             local nbg_n="${SBGS[$next]}"
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} $(cbg "$nbg_n")$(cfg "$cbg_n")▶"
-        elif [ "$STYLE" = "powerline" ]; then
+        elif [ "$STYLE" = "powerline" ] || [ "$STYLE" = "blend" ]; then
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} ${RST}"
         else
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} ${RST} "
