@@ -170,12 +170,12 @@ The `examples/` directory contains a full production customization example:
 
 | File | Description |
 |------|-------------|
-| `examples/werixo.sh` | Full MSP example: server aliases, Obsidian vault area detection, live gate progress tracking from a markdown file |
+| `examples/msp.sh` | Full MSP / multi-server example: server aliases, Obsidian vault area detection, goal progress tracking from a markdown file, ops user context |
 
 To use an example as your statusline:
 
 ```bash
-cp examples/werixo.sh ~/.claude/statusline.sh
+cp examples/msp.sh ~/.claude/statusline.sh
 ```
 
 ### Writing your own extension
@@ -231,7 +231,7 @@ add_seg "MYDATA" $C_BLUE $C_WHITE
 **Slow statusline:**
 - The git operations (`git status`, `git branch`) run on every render
 - For large repos, consider setting `CLAUDE_STATUSLINE_MODE=focus` to skip non-essential segments
-- The `examples/werixo.sh` uses a TTL cache for expensive file reads
+- The `examples/msp.sh` uses a TTL cache for expensive file reads
 
 ---
 
