@@ -26,6 +26,11 @@
 # STATUSLINE_FE_NAME          Override the frontend label (default: CLAUDE).
 #                              Useful if you have multiple Claude sessions with different roles.
 #
+# STATUSLINE_COMPACT_RESERVE  Percentage points subtracted from remaining context to
+#                              approximate the "% until auto-compact" badge. (default: 16)
+#                              Set to 0 to show true free-context %. Approximation only —
+#                              the real auto-compact threshold is internal to Claude Code.
+#
 # flat      — colored blocks with reset gap between segments
 # blend     — segments fuse together using ▌ (U+258C) half-block transitions (default)
 # powerline — colored blocks with ▶ (U+25B6) chained transitions
@@ -100,11 +105,11 @@ host_alias() {
 }
 
 frontend_context() {
-    if [ -n "${STATUSLINE_FE_NAME:-}" ]; then
-        printf '%s' "${STATUSLINE_FE_NAME}" | tr '[:lower:]' '[:upper:]'
-    else
-        printf 'CLAUDE'
-    fi
+    local f="$HOME/.claude/.launch_context"
+    local src=""
+    [ -f "$f" ] && src=$(tr -d '[:space:]' < "$f" 2>/dev/null)
+    [ -z "$src" ] && src="${STATUSLINE_FE_NAME:-CLAUDE}"
+    printf '%s' "$src" | tr '[:lower:]' '[:upper:]'
 }
 
 git_branch() {
@@ -178,13 +183,14 @@ MNAME=$(model_short)
 FE=$(frontend_context)
 add_seg "${FE}:${MNAME}" $C_FE $C_WHITE
 
-# S2 — CONTEXT (one: mapped host > project pattern > LOCAL)
+# S2 — CONTEXT (mapped host > active path > LOCAL)
 HOST=$(host_alias)
+ACTIVE_PATH=""
+[ -f "$HOME/.claude/.active_path" ] && ACTIVE_PATH=$(tr -d '[:space:]' < "$HOME/.claude/.active_path" 2>/dev/null)
 if [ "$HOST" != "LOCAL" ]; then
     add_seg "$HOST" $C_BLUE $C_WHITE
-elif is_project 2>/dev/null; then
-    LABEL="${STATUSLINE_PROJECT_LABEL:-PROJECT}"
-    add_seg "$LABEL" "${STATUSLINE_ACCENT_COLOR:-$C_ACCENT}" $C_WHITE
+elif [ -n "$ACTIVE_PATH" ]; then
+    add_seg "$ACTIVE_PATH" $C_LOCAL $C_WHITE
 else
     add_seg "LOCAL" $C_LOCAL $C_GRAY
 fi
@@ -204,14 +210,43 @@ else
     add_seg "no-git" $C_DARK $C_GRAY
 fi
 
-# S4 — STATE (LIVE > SAFE)
-if is_live 2>/dev/null; then
-    add_seg "LIVE" $C_RED $C_WHITE
-else
-    add_seg "SAFE" $C_GREEN $C_WHITE
+# S4 — CONTEXT WINDOW (countdown to auto-compact, approx)
+# Claude Code's "X% until auto-compact" badge is internal state and is NOT exposed
+# in the statusline JSON. We approximate it: remaining_percentage minus a reserved
+# buffer (output reservation + safety margin) that Claude Code keeps before firing
+# auto-compact. Tune the buffer via STATUSLINE_COMPACT_RESERVE (percentage points,
+# default 16 — matched against the observed badge). Caveat: it is an APPROXIMATION;
+# the real threshold is internal and the buffer (in pp) shifts if context_window_size
+# changes (200k vs 1M). Set STATUSLINE_COMPACT_RESERVE=0 to show true free context.
+CTX_REM=$(printf '%s' "$INPUT" | jq -r '.context_window.remaining_percentage // empty' 2>/dev/null)
+COMPACT_RESERVE="${STATUSLINE_COMPACT_RESERVE:-16}"
+if [ -n "$CTX_REM" ]; then
+    CTX_LEFT=$(( CTX_REM - COMPACT_RESERVE ))
+    [ "$CTX_LEFT" -lt 0 ] && CTX_LEFT=0
+    if [ "$CTX_LEFT" -ge 25 ]; then
+        add_seg "CTX→${CTX_LEFT}%" $C_GREEN $C_WHITE
+    elif [ "$CTX_LEFT" -ge 10 ]; then
+        add_seg "CTX→${CTX_LEFT}%" $C_AMBER $C_BLACK
+    else
+        add_seg "CTX→${CTX_LEFT}%" $C_RED $C_WHITE
+    fi
 fi
 
-# S5 — TIME (ops/debug only)
+# S5 — EFFORT
+EFFORT=$(printf '%s' "$INPUT" | jq -r '.effort.level // empty' 2>/dev/null)
+[ -z "$EFFORT" ] && EFFORT=$(jq -r '.effortLevel // empty' "$HOME/.claude/settings.json" 2>/dev/null)
+if [ -n "$EFFORT" ]; then
+    case "$EFFORT" in
+        low)    add_seg "EFF:L"   $C_GREEN  $C_WHITE ;;
+        medium) add_seg "EFF:M"   $C_GREEN  $C_WHITE ;;
+        high)   add_seg "EFF:H"   $C_AMBER  $C_BLACK ;;
+        xhigh)  add_seg "EFF:XH"  $C_RED    $C_WHITE ;;
+        max)    add_seg "EFF:MAX" $C_RED    $C_WHITE ;;
+        *)      add_seg "EFF:${EFFORT:0:3}" $C_DARK $C_GRAY ;;
+    esac
+fi
+
+# S6 — TIME (ops/debug only)
 if [ "$MODE" = "ops" ] || [ "$MODE" = "debug" ]; then
     add_seg "$(date +%H:%M)" $C_DARKER $C_GRAY
 fi
