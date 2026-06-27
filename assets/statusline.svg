@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="556" height="86" viewBox="0 0 556 86" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace' font-size="15" font-weight="600">
+<title>claude-statusline preview</title>
+<clipPath id="clip0"><rect x="8" y="8" width="495" height="30" rx="6"/></clipPath>
+<g clip-path="url(#clip0)">
+<rect x="8" y="8" width="141" height="30" fill="#005f87"/>
+<text x="78.5" y="24.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">CLAUDE:OPS+1M</text>
+<rect x="149" y="8" width="69" height="30" fill="#3a3a3a"/>
+<text x="183.5" y="24.0" fill="#808080" text-anchor="middle" dominant-baseline="middle">LOCAL</text>
+<rect x="218" y="8" width="60" height="30" fill="#008700"/>
+<text x="248.0" y="24.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">main</text>
+<rect x="278" y="8" width="87" height="30" fill="#008700"/>
+<text x="321.5" y="24.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">CTX→62%</text>
+<rect x="365" y="8" width="69" height="30" fill="#af8700"/>
+<text x="399.5" y="24.0" fill="#000000" text-anchor="middle" dominant-baseline="middle">EFF:H</text>
+<rect x="434" y="8" width="69" height="30" fill="#1c1c1c"/>
+<text x="468.5" y="24.0" fill="#808080" text-anchor="middle" dominant-baseline="middle">14:32</text>
+</g>
+<clipPath id="clip1"><rect x="8" y="48" width="540" height="30" rx="6"/></clipPath>
+<g clip-path="url(#clip1)">
+<rect x="8" y="48" width="114" height="30" fill="#005f87"/>
+<text x="65.0" y="64.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">CLAUDE:SNT</text>
+<rect x="122" y="48" width="78" height="30" fill="#005faf"/>
+<text x="161.0" y="64.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">web-01</text>
+<rect x="200" y="48" width="114" height="30" fill="#af8700"/>
+<text x="257.0" y="64.0" fill="#000000" text-anchor="middle" dominant-baseline="middle">feat/auth*</text>
+<rect x="314" y="48" width="78" height="30" fill="#d70000"/>
+<text x="353.0" y="64.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">CTX→6%</text>
+<rect x="392" y="48" width="87" height="30" fill="#d70000"/>
+<text x="435.5" y="64.0" fill="#eeeeee" text-anchor="middle" dominant-baseline="middle">EFF:MAX</text>
+<rect x="479" y="48" width="69" height="30" fill="#1c1c1c"/>
+<text x="513.5" y="64.0" fill="#808080" text-anchor="middle" dominant-baseline="middle">09:15</text>
+</g>
+</svg>

@@ -1,26 +1,23 @@
 # claude-statusline
 
-A configurable status bar for [Claude Code](https://claude.ai/code) that shows model, context, git state, and time in a persistent visual segment bar.
+A configurable status bar for [Claude Code](https://claude.ai/code) that shows model, context, git state, context-window headroom, reasoning effort, and time in a persistent visual segment bar.
 
-```
- CLAUDE:SNT   LOCAL   main   SAFE   14:32
-```
+![claude-statusline preview](assets/statusline.svg)
 
-```
- CLAUDE:SNT   PROD   feature/auth*   LIVE   14:32
-```
+The layout is `FE:MODEL · CONTEXT · GIT · CTX · EFFORT · TIME`. Segment colors shift with state: git turns amber when dirty, `CTX` and `EFF` warm up (green → amber → red) as you approach a limit.
 
 ---
 
 ## Features
 
-- **Model segment** — shows active model short name (SNT/OPS/HKU) + 1M context flag
-- **Context segment** — host alias (if mapped) or project pattern match, falls back to LOCAL
-- **Git segment** — branch name (truncated), dirty indicator `*`, ahead/behind in debug mode
-- **State segment** — `LIVE` (red) when on production host or production branch, `SAFE` otherwise
-- **Time segment** — current `HH:MM` in ops/debug modes
-- **Three styles** — `blend` (default, ▌ half-block color fusion), `flat` (spaced blocks), `powerline` (▶ arrows)
-- **Three modes** — `focus` (minimal), `ops` (default), `debug` (+ CWD + ahead/behind)
+- **Model segment** — active model short name (`SNT`/`OPS`/`HKU`) plus a `+1M` flag for 1M-context models. The label before the colon defaults to `CLAUDE` but can be driven per-session (see [Frontend label](#frontend-label)).
+- **Context segment** — a mapped host alias, or an active working path, falling back to `LOCAL`.
+- **Git segment** — branch name (truncated to 12 chars), dirty indicator `*` (amber), ahead/behind counts in debug mode.
+- **CTX segment** — approximate headroom before auto-compact (`CTX→N%`). See [Context window](#context-window-auto-compact-countdown).
+- **Effort segment** — current reasoning effort (`EFF:L/M/H/XH/MAX`), shown only when the model supports it.
+- **Time segment** — current `HH:MM` in ops/debug modes.
+- **Three styles** — `blend` (default, ▌ half-block color fusion), `flat` (spaced blocks), `powerline` (▶ arrows). No Nerd Font required for any style.
+- **Three modes** — `focus` (minimal), `ops` (default), `debug` (+ CWD).
 
 ---
 
@@ -36,7 +33,7 @@ A configurable status bar for [Claude Code](https://claude.ai/code) that shows m
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/claude-statusline.git
+git clone https://github.com/clouitreee/claude-statusline.git
 cd claude-statusline
 bash install.sh
 ```
@@ -81,13 +78,13 @@ export CLAUDE_STATUSLINE_MODE=focus     # focus | ops (default) | debug
 
 | Mode | Segments shown |
 |------|---------------|
-| `focus` | FE:MODEL, CONTEXT, GIT |
-| `ops` | FE:MODEL, CONTEXT, GIT, STATE, TIME |
-| `debug` | FE:MODEL, CONTEXT, GIT, STATE, TIME, CWD, ahead/behind |
+| `focus` | FE:MODEL, CONTEXT, GIT, CTX, EFFORT |
+| `ops` | FE:MODEL, CONTEXT, GIT, CTX, EFFORT, TIME |
+| `debug` | FE:MODEL, CONTEXT, GIT, CTX, EFFORT, TIME, CWD, git ahead/behind |
 
 ### Server host mapping
 
-Map your server hostnames to short aliases. Hosts mapped to `PROD` or `LIVE` automatically trigger the red `LIVE` state indicator.
+Map your server hostnames to short aliases. The matched alias appears in the context segment, so a Claude Code session running over SSH on a known host is recognizable at a glance.
 
 ```bash
 # Single server
@@ -97,36 +94,53 @@ export STATUSLINE_HOST_MAP="myserver=PROD"
 export STATUSLINE_HOST_MAP="web-01=PROD db-01=PROD devbox=DEV staging=STAGE"
 ```
 
-Without any mapping, all hosts show as `LOCAL`.
+Without any mapping, hosts show as `LOCAL`.
 
-### Project context detection
+### Active path
 
-Show a custom label when Claude Code is working inside a specific directory tree.
-
-```bash
-# Match by path pattern (regex)
-export STATUSLINE_PROJECT_PATTERN="acme|~/work/acme"
-export STATUSLINE_PROJECT_LABEL="ACME"         # shown in context segment
-export STATUSLINE_ACCENT_COLOR=127             # 256-color number for segment bg
-```
-
-When the current working directory matches `STATUSLINE_PROJECT_PATTERN`, the context segment shows your custom label instead of `LOCAL`.
-
-### Production/live detection
-
-Controls when the `LIVE` (red) indicator appears. Checked against CWD path and branch name.
+When the host is `LOCAL`, the context segment can show a short label read from `~/.claude/.active_path` (whitespace-trimmed). This is meant to be written by a hook — for example a `PreToolUse` hook that records which project or area the session is currently working in. If the file is absent or empty, the segment shows `LOCAL`.
 
 ```bash
-export STATUSLINE_LIVE_PATTERN="live|prod(uction)?|release"   # default
+# example: a hook writes the current area into the file
+echo "billing-api" > ~/.claude/.active_path
 ```
+
+### Context window (auto-compact countdown)
+
+The `CTX` segment approximates Claude Code's "% until auto-compact" badge. Claude Code does **not** expose that exact number to the statusline, so it is derived from `context_window.remaining_percentage` minus a reserved buffer (the output reservation plus safety margin Claude Code keeps before it compacts):
+
+```
+CTX→N%  =  remaining_percentage − STATUSLINE_COMPACT_RESERVE
+```
+
+```bash
+export STATUSLINE_COMPACT_RESERVE=16    # percentage points (default: 16)
+```
+
+- Colors: green at `≥25`, amber at `10–24`, red below `10`.
+- Set `STATUSLINE_COMPACT_RESERVE=0` to show the true free-context percentage instead of the countdown.
+- This is an approximation. The real auto-compact threshold is internal to Claude Code, and the buffer expressed in percentage points shifts if the context window size changes (200k vs 1M), since the underlying reservation is a fixed token count. Recalibrate the reserve for the window size you actually run.
+
+### Reasoning effort
+
+The `EFF` segment is automatic and needs no configuration. It reads the live effort level from the statusline JSON (`effort.level`), falling back to `effortLevel` in `~/.claude/settings.json`. It is hidden for models that do not support the effort parameter.
 
 ### Frontend label
 
-Override the frontend identifier shown before the model name.
+The label before the model name (`CLAUDE:OPS`) defaults to `CLAUDE`. Two ways to override it:
 
 ```bash
-export STATUSLINE_FE_NAME="ACME"    # shows as: ACME:SNT
+# static, via environment
+export STATUSLINE_FE_NAME="ACME"        # shows as: ACME:OPS
 ```
+
+Or per-session, by writing `~/.claude/.launch_context` (whitespace-trimmed, uppercased). This lets different launch aliases tag their sessions distinctly:
+
+```bash
+echo "ops" > ~/.claude/.launch_context  # shows as: OPS:OPS
+```
+
+The file takes precedence over `STATUSLINE_FE_NAME` when present.
 
 ---
 
@@ -137,22 +151,17 @@ export STATUSLINE_FE_NAME="ACME"    # shows as: ACME:SNT
 ```bash
 # ~/.zshrc
 export STATUSLINE_HOST_MAP="web-01=PROD web-02=PROD db-primary=DB staging=STAGE"
-export STATUSLINE_LIVE_PATTERN="live|prod|main|release"
 export CLAUDE_SL_STYLE=powerline
 ```
 
-Result on web-01: ` CLAUDE:SNT  PROD  main  LIVE  09:15 `
+Result on web-01: ` CLAUDE:SNT  PROD  main  CTX→48%  EFF:M  09:15 `
 
-### Project-scoped development
+### Tighter auto-compact warning
 
 ```bash
-# ~/.zshrc
-export STATUSLINE_PROJECT_PATTERN="acme-corp|~/projects/acme"
-export STATUSLINE_PROJECT_LABEL="ACME"
-export STATUSLINE_ACCENT_COLOR=25   # dark blue
+# warn earlier — treat a bigger slice as reserved
+export STATUSLINE_COMPACT_RESERVE=22
 ```
-
-Result inside ~/projects/acme: ` CLAUDE:SNT  ACME  feature/payments*  SAFE  14:47 `
 
 ### Focus mode (minimal)
 
@@ -160,17 +169,17 @@ Result inside ~/projects/acme: ` CLAUDE:SNT  ACME  feature/payments*  SAFE  14:4
 export CLAUDE_STATUSLINE_MODE=focus
 ```
 
-Result: ` CLAUDE:SNT  LOCAL  main `
+Result: ` CLAUDE:SNT  LOCAL  main  CTX→62%  EFF:H `
 
 ---
 
 ## Advanced customization
 
-The `examples/` directory contains a full production customization example:
+The `examples/` directory contains a fuller, self-contained variant you can adopt or borrow from:
 
 | File | Description |
 |------|-------------|
-| `examples/msp.sh` | Full MSP / multi-server example: server aliases, Obsidian vault area detection, goal progress tracking from a markdown file, ops user context |
+| `examples/msp.sh` | An independent MSP / multi-server variant with its own segment set (server aliases, vault-area detection, goal progress from a markdown file, a LIVE/SAFE state segment, TTL-cached file reads). It is a separate example layout, not a drop-in mirror of the main `statusline.sh`. |
 
 To use an example as your statusline:
 
@@ -182,34 +191,20 @@ cp examples/msp.sh ~/.claude/statusline.sh
 
 The script is designed to be easy to fork. Key extension points:
 
-**Add a custom context label:**
-```bash
-# After the generic is_project() function, add your own:
-is_myproject() {
-    printf '%s' "$CWD" | grep -q "myproject" && return 0
-    return 1
-}
-```
+**Add a custom segment** — append it wherever you like after the segment arrays are initialized:
 
-**Add a custom state segment:**
 ```bash
-# Replace or supplement the S4 state block:
-if my_critical_condition; then
-    add_seg "CRIT" $C_RED $C_WHITE
-elif is_live; then
-    add_seg "LIVE" $C_RED $C_WHITE
-else
-    add_seg "SAFE" $C_GREEN $C_WHITE
-fi
-```
-
-**Add a custom segment:**
-```bash
-# Any point after the segment arrays are initialized:
 add_seg "MYDATA" $C_BLUE $C_WHITE
 ```
 
-`add_seg TEXT BG_COLOR_256 FG_COLOR_256`
+`add_seg TEXT BG_COLOR_256 FG_COLOR_256` pushes a segment with a 256-color background and foreground; the renderer handles the blend/flat/powerline transitions for you.
+
+**Read a value from the JSON input** — the full Claude Code statusline payload is in `$INPUT`:
+
+```bash
+SESSION=$(printf '%s' "$INPUT" | jq -r '.session_name // empty')
+[ -n "$SESSION" ] && add_seg "$SESSION" $C_DARK $C_GRAY
+```
 
 ---
 
@@ -219,6 +214,9 @@ add_seg "MYDATA" $C_BLUE $C_WHITE
 - Check `~/.claude/settings.json` contains the `statusLine` key
 - Run `bash ~/.claude/statusline.sh </dev/null` manually — should output a colored line
 - Verify `jq` is installed: `jq --version`
+
+**CTX number doesn't match the "% until auto-compact" badge:**
+- Expected. The badge is internal Claude Code state and is not exposed to the statusline; `CTX` approximates it (see [Context window](#context-window-auto-compact-countdown)). Tune `STATUSLINE_COMPACT_RESERVE` for your window size.
 
 **Colors look wrong:**
 - Your terminal must support 256 colors: `echo $TERM` should show `xterm-256color` or similar
@@ -230,8 +228,8 @@ add_seg "MYDATA" $C_BLUE $C_WHITE
 
 **Slow statusline:**
 - The git operations (`git status`, `git branch`) run on every render
-- For large repos, consider setting `CLAUDE_STATUSLINE_MODE=focus` to skip non-essential segments
-- The `examples/msp.sh` uses a TTL cache for expensive file reads
+- For large repos, consider setting `CLAUDE_STATUSLINE_MODE=focus`
+- The `examples/msp.sh` variant uses a TTL cache for expensive file reads
 
 ---
 
