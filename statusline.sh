@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ~/.claude/statusline.sh — v1.0 Visual Segment Bar
+# ~/.claude/statusline.sh — v1.1 Visual Segment Bar
 #
 # Structure:  [FE:MODEL] [CONTEXT] [GIT] [STATE] [TIME]
 #
@@ -41,6 +41,10 @@
 # ─── INPUT ────────────────────────────────────────────────────────────────────
 INPUT=$(cat 2>/dev/null || true)
 CWD=$(printf '%s' "$INPUT"   | jq -r '.cwd   // empty' 2>/dev/null)
+# Stable, unique per Claude Code session (per official docs) — used to scope
+# per-session cache files instead of the shared ~/.claude/.active_path, which
+# leaks state across concurrently open sessions.
+SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
 MODEL=$(printf '%s' "$INPUT" | jq -r '
     if (.model | type) == "object"
     then (.model.display_name // .model.id // "?")
@@ -105,9 +109,17 @@ host_alias() {
 }
 
 frontend_context() {
-    local f="$HOME/.claude/.launch_context"
-    local src=""
-    [ -f "$f" ] && src=$(tr -d '[:space:]' < "$f" 2>/dev/null)
+    # CLAUDE_LAUNCH_ALIAS is set by the launching shell function (claude()/clobs())
+    # and inherited per-process — always prefer it. ~/.claude/.launch_context is a
+    # single file shared across every concurrently open Claude Code session, so a
+    # clobs() session in one tab silently relabels every other tab's statusline
+    # (including plain claude() sessions) until someone relaunches with claude().
+    # Keep the file only as a fallback for callers that don't set the env var.
+    local src="${CLAUDE_LAUNCH_ALIAS:-}"
+    if [ -z "$src" ]; then
+        local f="$HOME/.claude/.launch_context"
+        [ -f "$f" ] && src=$(tr -d '[:space:]' < "$f" 2>/dev/null)
+    fi
     [ -z "$src" ] && src="${STATUSLINE_FE_NAME:-CLAUDE}"
     printf '%s' "$src" | tr '[:lower:]' '[:upper:]'
 }
@@ -186,7 +198,16 @@ add_seg "${FE}:${MNAME}" $C_FE $C_WHITE
 # S2 — CONTEXT (mapped host > active path > LOCAL)
 HOST=$(host_alias)
 ACTIVE_PATH=""
-[ -f "$HOME/.claude/.active_path" ] && ACTIVE_PATH=$(tr -d '[:space:]' < "$HOME/.claude/.active_path" 2>/dev/null)
+# Per-session file (hooks/track-active-path.sh writes one per session_id) —
+# ~/.claude/.active_path was a single file shared by every concurrently open
+# session, so any session's tool call could overwrite what another session's
+# statusline displayed. Fall back to the legacy shared file only if no
+# session-scoped file exists yet (e.g. mid-rollout, or session_id unavailable).
+if [ -n "$SESSION_ID" ] && [ -f "$HOME/.claude/.active_path-$SESSION_ID" ]; then
+    ACTIVE_PATH=$(tr -d '[:space:]' < "$HOME/.claude/.active_path-$SESSION_ID" 2>/dev/null)
+elif [ -f "$HOME/.claude/.active_path" ]; then
+    ACTIVE_PATH=$(tr -d '[:space:]' < "$HOME/.claude/.active_path" 2>/dev/null)
+fi
 if [ "$HOST" != "LOCAL" ]; then
     add_seg "$HOST" $C_BLUE $C_WHITE
 elif [ -n "$ACTIVE_PATH" ]; then

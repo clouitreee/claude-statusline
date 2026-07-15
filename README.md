@@ -98,12 +98,17 @@ Without any mapping, hosts show as `LOCAL`.
 
 ### Active path
 
-When the host is `LOCAL`, the context segment can show a short label read from `~/.claude/.active_path` (whitespace-trimmed). This is meant to be written by a hook — for example a `PreToolUse` hook that records which project or area the session is currently working in. If the file is absent or empty, the segment shows `LOCAL`.
+When the host is `LOCAL`, the context segment can show a short label read from a per-session file: `~/.claude/.active_path-<session_id>` (whitespace-trimmed), where `<session_id>` is the `session_id` field Claude Code passes on stdin — stable and unique for the lifetime of a session. This is meant to be written by a hook — for example a `PreToolUse` hook that records which project or area the session is currently working in. A ready-to-use example hook is in [`examples/track-active-path.sh`](examples/track-active-path.sh).
+
+If no session-scoped file exists yet, the statusline falls back to the legacy shared `~/.claude/.active_path` (pre-`session_id` versions of this tool); if neither exists, the segment shows `LOCAL`.
 
 ```bash
-# example: a hook writes the current area into the file
-echo "billing-api" > ~/.claude/.active_path
+# example: a hook writes the current area into a file scoped to its own session
+SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id')
+echo "billing-api" > ~/.claude/.active_path-"$SESSION_ID"
 ```
+
+> **Why per-session, not one shared file:** a single `~/.claude/.active_path` is shared by *every* Claude Code session open at once. A `PreToolUse` hook fires per-session, so with a shared file, a tool call in one terminal tab silently overwrites what every other open session's statusline displays — the label you see can belong to a completely different project. Namespacing by `session_id` isolates each session's state; see [`examples/track-active-path.sh`](examples/track-active-path.sh) for the reference implementation, including an opportunistic cleanup pass for files left behind by closed sessions.
 
 ### Context window (auto-compact countdown)
 
@@ -127,20 +132,31 @@ The `EFF` segment is automatic and needs no configuration. It reads the live eff
 
 ### Frontend label
 
-The label before the model name (`CLAUDE:OPS`) defaults to `CLAUDE`. Two ways to override it:
+The label before the model name (`CLAUDE:OPS`) defaults to `CLAUDE`. Three ways to set it, checked in this order:
 
-```bash
-# static, via environment
-export STATUSLINE_FE_NAME="ACME"        # shows as: ACME:OPS
-```
+1. **`CLAUDE_LAUNCH_ALIAS` environment variable** — set by the shell function that launches Claude Code, inherited per-process. **Recommended** when you run more than one launch alias concurrently (e.g. a plain `claude` and an `ops`/`clobs`-style alias in different tabs): each session gets its own value, correctly isolated, no shared state.
 
-Or per-session, by writing `~/.claude/.launch_context` (whitespace-trimmed, uppercased). This lets different launch aliases tag their sessions distinctly:
+   ```bash
+   # in a shell wrapper function, before exec'ing claude
+   ops() {
+     export CLAUDE_LAUNCH_ALIAS="ops"
+     command claude "$@"
+   }
+   ```
 
-```bash
-echo "ops" > ~/.claude/.launch_context  # shows as: OPS:OPS
-```
+2. **`~/.claude/.launch_context`** (whitespace-trimmed, uppercased) — fallback for callers that can't set an env var before launch:
 
-The file takes precedence over `STATUSLINE_FE_NAME` when present.
+   ```bash
+   echo "ops" > ~/.claude/.launch_context  # shows as: OPS:OPS
+   ```
+
+   ⚠️ Unlike active-path tracking above, this file **cannot** be namespaced by `session_id` — a launch alias is chosen by the shell *before* Claude Code starts and is assigned a session ID, so no session-scoped key exists yet at that point. The file is shared by every concurrently open session: whichever alias launched most recently wins and relabels every other open session's statusline until it's relaunched. If you only ever run one launch alias at a time, this is harmless; if you regularly run several at once, use `CLAUDE_LAUNCH_ALIAS` instead.
+
+3. **`STATUSLINE_FE_NAME`** environment variable — static default used only when neither of the above is set.
+
+   ```bash
+   export STATUSLINE_FE_NAME="ACME"        # shows as: ACME:OPS
+   ```
 
 ---
 
@@ -180,6 +196,7 @@ The `examples/` directory contains a fuller, self-contained variant you can adop
 | File | Description |
 |------|-------------|
 | `examples/msp.sh` | An independent MSP / multi-server variant with its own segment set (server aliases, vault-area detection, goal progress from a markdown file, a LIVE/SAFE state segment, TTL-cached file reads). It is a separate example layout, not a drop-in mirror of the main `statusline.sh`. |
+| `examples/track-active-path.sh` | Reference `PreToolUse` hook for the [Active path](#active-path) segment — writes a per-`session_id` file so concurrent sessions don't overwrite each other's label. |
 
 To use an example as your statusline:
 
