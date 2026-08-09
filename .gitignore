@@ -10,3 +10,7 @@
 .vscode/
 *.swp
 *~
+
+# pnpm / TypeScript
+node_modules/
+*.tsbuildinfo
