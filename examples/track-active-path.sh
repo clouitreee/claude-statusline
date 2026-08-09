@@ -46,7 +46,7 @@ DIR=$(dirname "$FILE" 2>/dev/null)
 
 # Relative to the project's cwd when possible
 if [ -n "$CWD" ]; then
-    REL="${DIR#$CWD/}"
+    REL="${DIR#"$CWD"/}"
     [ "$REL" = "$DIR" ] && REL=$(basename "$DIR")
 else
     REL=$(basename "$DIR")

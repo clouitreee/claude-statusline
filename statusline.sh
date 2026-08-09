@@ -3,8 +3,9 @@
 #
 # Structure:  [FE:MODEL] [CONTEXT] [GIT] [STATE] [TIME]
 #
-# Modes:  CLAUDE_STATUSLINE_MODE=focus|ops|debug  (default: ops)
-# Style:  CLAUDE_SL_STYLE=flat|powerline          (default: flat)
+# Modes:  AGENT_STATUSLINE_MODE=focus|ops|debug   (default: ops)
+# Style:  AGENT_STATUSLINE_STYLE=flat|blend|powerline (default: blend)
+# Legacy CLAUDE_STATUSLINE_MODE and CLAUDE_SL_STYLE remain supported.
 #
 # --- Optional configuration (env vars) ---
 #
@@ -53,8 +54,8 @@ MODEL=$(printf '%s' "$INPUT" | jq -r '
 [ -z "$CWD" ] && CWD="$PWD"
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
-MODE="${CLAUDE_STATUSLINE_MODE:-ops}"
-STYLE="${CLAUDE_SL_STYLE:-blend}"
+MODE="${AGENT_STATUSLINE_MODE:-${CLAUDE_STATUSLINE_MODE:-ops}}"
+STYLE="${AGENT_STATUSLINE_STYLE:-${CLAUDE_SL_STYLE:-blend}}"
 
 # ─── 256-COLOR PALETTE ────────────────────────────────────────────────────────
 C_DARK=236      # segment default bg (dark gray)
@@ -80,14 +81,16 @@ model_short() {
     local m="${MODEL:-?}" is1m=""
     # detect 1M context (either [1m] in id or "1M" in display_name)
     printf '%s' "$m" | grep -qiE '\[1m\]|1M context' && is1m="+1M"
-    # normalize to short family name
-    m=$(printf '%s' "$m" | sed \
-        -e 's/[Ss]onnet.*/SNT/' \
-        -e 's/[Oo]pus.*/OPS/'   \
-        -e 's/[Hh]aiku.*/HKU/'  \
-        -e 's/claude-//g')
-    # fallback: still a messy string → truncate to 6 chars
-    printf '%s' "$m" | grep -qE '^(SNT|OPS|HKU)' || m=$(printf '%s' "$m" | cut -c1-6)
+    # normalize family names wherever they occur in an id or display name
+    if printf '%s' "$m" | grep -qi 'sonnet'; then
+        m="SNT"
+    elif printf '%s' "$m" | grep -qi 'opus'; then
+        m="OPS"
+    elif printf '%s' "$m" | grep -qi 'haiku'; then
+        m="HKU"
+    else
+        m=$(printf '%s' "$m" | sed -e 's/^[Cc]laude[- ]*//' | cut -c1-10)
+    fi
     printf '%s' "${m}${is1m}"
 }
 
@@ -172,11 +175,11 @@ render_bar() {
         local text="${SEGS[$i]}" cbg_n="${SBGS[$i]}" cfg_n="${SFGS[$i]}"
         local next=$(( i + 1 ))
 
-        if [ "$STYLE" = "blend" ] && [ $next -lt $count ]; then
+        if [ "$STYLE" = "blend" ] && [ "$next" -lt "$count" ]; then
             # ▌ left-half block: fg=current bg, bg=next bg → smooth color fusion
             local nbg_n="${SBGS[$next]}"
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text}$(cbg "$nbg_n")$(cfg "$cbg_n")▌"
-        elif [ "$STYLE" = "powerline" ] && [ $next -lt $count ]; then
+        elif [ "$STYLE" = "powerline" ] && [ "$next" -lt "$count" ]; then
             local nbg_n="${SBGS[$next]}"
             out+="$(cbg "$cbg_n")$(cfg "$cfg_n") ${text} $(cbg "$nbg_n")$(cfg "$cbg_n")▶"
         elif [ "$STYLE" = "powerline" ] || [ "$STYLE" = "blend" ]; then
@@ -212,6 +215,8 @@ if [ "$HOST" != "LOCAL" ]; then
     add_seg "$HOST" $C_BLUE $C_WHITE
 elif [ -n "$ACTIVE_PATH" ]; then
     add_seg "$ACTIVE_PATH" $C_LOCAL $C_WHITE
+elif is_project; then
+    add_seg "${STATUSLINE_PROJECT_LABEL:-PROJECT}" "${STATUSLINE_ACCENT_COLOR:-$C_ACCENT}" $C_WHITE
 else
     add_seg "LOCAL" $C_LOCAL $C_GRAY
 fi
